@@ -6,6 +6,8 @@ use serde_repr::Deserialize_repr;
 
 pub const TIMEOUT_S: i64 = 15;
 
+pub const WEB_PORT: u16 = 3030;
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Response<Data> {

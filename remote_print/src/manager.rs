@@ -21,6 +21,7 @@ use crate::{
     v3::{
         self, RemotePrintV3,
         status::{DiscoveryResponse, ProxyDiscoveryResponse},
+        defined::{CameraState, FileListing, HistoryTask, Remote},
     },
 };
 
@@ -52,7 +53,16 @@ pub struct Client {
 
     pub print_info: PrintInfo,
     pub transfer_info: FileTransferInfo,
+
+    pub camera_supported: bool,
+    pub camera: CameraState,
+
+    pub camera_streams: Option<(u32, u32)>,
+    pub file_types: Vec<String>,
+    pub error: Option<String>,
 }
+
+const CAMERA_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl RemotePrintManager {
     pub fn init(
@@ -188,6 +198,90 @@ impl RemotePrintManagerInner {
         }
     }
 
+    pub fn camera_start(&self, mainboard: &str) -> Result<()> {
+        match self.protocol_version(mainboard) {
+            Some(ProtocolVersion::V3) => self.v3.camera_start(mainboard),
+            Some(ProtocolVersion::V1) => bail!("This printer does not support camera streaming."),
+            None => bail!("Printer `{mainboard}` is not connected."),
+        }
+    }
+
+    pub fn camera_stop(&self, mainboard: &str) -> Result<()> {
+        match self.protocol_version(mainboard) {
+            Some(ProtocolVersion::V3) => self.v3.camera_stop(mainboard),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn take_camera_url(&self, mainboard: &str) -> Option<String> {
+        self.v3.take_camera_url(mainboard)
+    }
+
+    pub fn upload_as_is(
+        &self,
+        mainboard: &str,
+        data: Arc<Vec<u8>>,
+        filename: String,
+    ) -> Result<()> {
+        match self.protocol_version(mainboard) {
+            Some(ProtocolVersion::V1) => self.v1.upload(mainboard, data, filename),
+            Some(ProtocolVersion::V3) => self.v3.upload(mainboard, data, filename),
+            None => bail!("Printer `{mainboard}` is not connected."),
+        }
+    }
+
+    pub fn list_files(&self, mainboard: &str, path: &str) -> Result<()> {
+        self.require_v3(mainboard, "browsing files")?;
+        self.v3.list_files(mainboard, path)
+    }
+
+    pub fn delete_files(
+        &self,
+        mainboard: &str,
+        files: Vec<String>,
+        folders: Vec<String>,
+    ) -> Result<()> {
+        self.require_v3(mainboard, "deleting files")?;
+        self.v3.delete_files(mainboard, files, folders)
+    }
+
+    pub fn list_history(&self, mainboard: &str) -> Result<()> {
+        self.require_v3(mainboard, "print history")?;
+        self.v3.list_history(mainboard)
+    }
+
+    pub fn file_listing(&self, mainboard: &str) -> Remote<FileListing> {
+        (self.v3.file_listing(mainboard)).unwrap_or_default()
+    }
+
+    pub fn history(&self, mainboard: &str) -> Remote<Vec<HistoryTask>> {
+        (self.v3.history(mainboard)).unwrap_or_default()
+    }
+
+    /// The directory last asked for with `list_files`.
+    pub fn files_path(&self, mainboard: &str) -> Option<String> {
+        self.v3.files_path(mainboard)
+    }
+
+    pub fn refresh_attributes(&self, mainboard: &str) -> Result<()> {
+        match self.protocol_version(mainboard) {
+            Some(ProtocolVersion::V3) => self.v3.refresh_attributes(mainboard),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn clear_error(&self, mainboard: &str) {
+        self.v3.clear_error(mainboard);
+    }
+
+    fn require_v3(&self, mainboard: &str, what: &str) -> Result<()> {
+        match self.protocol_version(mainboard) {
+            Some(ProtocolVersion::V3) => Ok(()),
+            Some(ProtocolVersion::V1) => bail!("This printer does not support {what}."),
+            None => bail!("Printer `{mainboard}` is not connected."),
+        }
+    }
+
     pub fn set_timeout(&self, timeout: Duration) -> Result<()> {
         self.udp.set_read_timeout(Some(timeout))?;
         Ok(())
@@ -259,6 +353,11 @@ impl Client {
             protocol_version: ProtocolVersion::V1,
             print_info: status.print_info.clone(),
             transfer_info: status.file_transfer_info.clone(),
+            camera_supported: false,
+            camera: CameraState::Idle,
+            camera_streams: None,
+            file_types: ["goo", "ctb"].map(str::to_owned).to_vec(),
+            error: None,
         }
     }
 
@@ -271,6 +370,20 @@ impl Client {
             protocol_version: ProtocolVersion::V3,
             print_info: status.print_info.clone(),
             transfer_info: client.transfer_info.clone(),
+            camera_supported: (attributes.capabilities.iter()).any(|x| x == "VIDEO_STREAM"),
+            camera: match &client.camera {
+                CameraState::Requested(at) if at.elapsed() > CAMERA_TIMEOUT => {
+                    CameraState::Failed("The printer did not answer.".into())
+                }
+                camera => camera.clone(),
+            },
+            camera_streams: attributes
+                .number_of_video_stream_connected
+                .zip(attributes.maximum_video_stream_allowed),
+            file_types: (attributes.support_file_type.iter())
+                .map(|x| x.trim().trim_start_matches('.').to_lowercase())
+                .collect(),
+            error: client.last_error.clone(),
         })
     }
 }

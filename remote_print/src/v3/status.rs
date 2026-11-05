@@ -71,6 +71,13 @@ pub struct Attributes {
     pub mainboard_ip: String,
     #[serde(rename = "MainboardID")]
     pub mainboard_id: String,
+
+    /// Video streams (RTSP sessions) open on the printer right now, and how
+    /// many it allows. Printers without a camera do not send these.
+    #[serde(default)]
+    pub number_of_video_stream_connected: Option<u32>,
+    #[serde(default)]
+    pub maximum_video_stream_allowed: Option<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -101,7 +108,8 @@ pub struct Command<T> {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CommandData<T> {
-    pub cmd: u8,
+    // Command numbers go past 255 (video stream is 386).
+    pub cmd: u16,
     pub data: T,
     #[serde(rename = "RequestID")]
     pub request_id: String,
@@ -121,7 +129,7 @@ pub struct ResponseMessage {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ResponseData {
-    pub cmd: u8,
+    pub cmd: u16,
     pub data: AckData,
     #[serde(rename = "MainboardID")]
     pub mainboard_id: String,
@@ -132,6 +140,24 @@ pub struct ResponseData {
 pub struct AckData {
     #[serde(default)]
     pub ack: u8,
+    /// Only in the reply to enabling the video stream.
+    #[serde(default)]
+    pub video_url: Option<String>,
+
+    // The rest is kept as raw JSON and picked apart by the code that asked, so
+    // that one odd entry cannot make the printer's whole reply unreadable.
+    /// Reply to the file list command.
+    #[serde(default)]
+    pub file_list: Option<Vec<Value>>,
+    /// Reply to the delete command: the paths that could not be deleted.
+    #[serde(default)]
+    pub err_data: Option<Vec<Value>>,
+    /// Reply to the history command: task ids.
+    #[serde(default)]
+    pub history_data: Option<Vec<Value>>,
+    /// Reply to the task details command.
+    #[serde(default)]
+    pub history_detail_list: Option<Vec<Value>>,
 }
 
 /// Response to `sdcp/error/{MainboardID}`
@@ -208,5 +234,36 @@ impl From<Response<ProxyDiscoveryResponse>> for Response<DiscoveryResponse> {
             id: response.id,
             data: response.data.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attributes_carry_video_stream_counts() {
+        let json = |extra: &str| {
+            format!(
+                r#"{{"Name":"n","MachineName":"m","BrandName":"b","ProtocolVersion":"V3.0.0","FirmwareVersion":"1",
+                "Capabilities":["VIDEO_STREAM"],"SupportFileType":["GOO"],"Resolution":"1x1","XYZsize":"1x1x1",
+                "MainboardIP":"192.0.2.10","MainboardID":"000000000001d354"{extra}}}"#
+            )
+        };
+
+        let with = serde_json::from_str::<Attributes>(&json(
+            r#","NumberOfVideoStreamConnected":1,"MaximumVideoStreamAllowed":2"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            (
+                with.number_of_video_stream_connected,
+                with.maximum_video_stream_allowed
+            ),
+            (Some(1), Some(2))
+        );
+
+        let without = serde_json::from_str::<Attributes>(&json("")).unwrap();
+        assert_eq!(without.number_of_video_stream_connected, None);
     }
 }
