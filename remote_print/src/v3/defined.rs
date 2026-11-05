@@ -6,6 +6,8 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::shared::WEB_PORT;
+
 /// Progress of asking a printer for its camera stream (SDCP V3 command 386).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum CameraState {

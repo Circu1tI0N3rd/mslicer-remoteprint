@@ -21,10 +21,7 @@ use ureq::unversioned::multipart::{Form, Part};
 
 use crate::{
     manager,
-    shared::{
-        CameraState, FileEntry, FileListing, FileTransferInfo, FileTransferStatus, HistoryTask,
-        Remote, Response, WEB_PORT, epoch, validate_printer_url,
-    },
+    shared::{FileTransferInfo, FileTransferStatus, Response, epoch, WEB_PORT},
     v3::{
         commands::{
             BATCH_DELETE_FILES, Cmd, RETRIEVE_FILE_LIST, RETRIEVE_HISTORY, RETRIEVE_TASK_DETAILS,
@@ -34,9 +31,11 @@ use crate::{
             AckData, Attributes, DiscoveryResponse, ErrorMessage, Message, NoticeMessage,
             ResponseMessage, Status, UploadResponse,
         },
+        defined::{CameraState, FileEntry, FileListing, HistoryTask, Remote, validate_printer_url},
     },
 };
 
+pub mod defined;
 pub mod commands;
 pub mod status;
 
