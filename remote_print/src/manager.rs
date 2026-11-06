@@ -58,7 +58,6 @@ pub struct Client {
     pub camera: CameraState,
 
     pub camera_streams: Option<(u32, u32)>,
-    pub file_types: Vec<String>,
     pub error: Option<String>,
 }
 
@@ -217,19 +216,6 @@ impl RemotePrintManagerInner {
         self.v3.take_camera_url(mainboard)
     }
 
-    pub fn upload_as_is(
-        &self,
-        mainboard: &str,
-        data: Arc<Vec<u8>>,
-        filename: String,
-    ) -> Result<()> {
-        match self.protocol_version(mainboard) {
-            Some(ProtocolVersion::V1) => self.v1.upload(mainboard, data, filename),
-            Some(ProtocolVersion::V3) => self.v3.upload(mainboard, data, filename),
-            None => bail!("Printer `{mainboard}` is not connected."),
-        }
-    }
-
     pub fn list_files(&self, mainboard: &str, path: &str) -> Result<()> {
         self.require_v3(mainboard, "browsing files")?;
         self.v3.list_files(mainboard, path)
@@ -356,7 +342,6 @@ impl Client {
             camera_supported: false,
             camera: CameraState::Idle,
             camera_streams: None,
-            file_types: ["goo", "ctb"].map(str::to_owned).to_vec(),
             error: None,
         }
     }
@@ -380,9 +365,6 @@ impl Client {
             camera_streams: attributes
                 .number_of_video_stream_connected
                 .zip(attributes.maximum_video_stream_allowed),
-            file_types: (attributes.support_file_type.iter())
-                .map(|x| x.trim().trim_start_matches('.').to_lowercase())
-                .collect(),
             error: client.last_error.clone(),
         })
     }

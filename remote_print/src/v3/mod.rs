@@ -246,6 +246,15 @@ impl RemotePrintV3 {
         Ok(())
     }
 
+    pub fn supported_file_types(&self, mainboard: &str) -> Option<Vec<String>> {
+        match self.clients().get_mut(mainboard) {
+            Some(client) => (attributes.support_file_type.iter())
+                .map(|x| x.trim().trim_start_matches('.').to_lowercase())
+                .collect(),
+            _ => None,
+        }
+    }
+
     pub fn upload(&self, mainboard: &str, data: Arc<Vec<u8>>, filename: String) -> Result<()> {
         let mut clients = self.clients.lock();
         let client = clients.get_mut(mainboard).unwrap();
