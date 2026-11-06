@@ -248,9 +248,10 @@ impl RemotePrintV3 {
 
     pub fn supported_file_types(&self, mainboard: &str) -> Option<Vec<String>> {
         match self.clients().get_mut(mainboard) {
-            Some(client) => (attributes.support_file_type.iter())
-                .map(|x| x.trim().trim_start_matches('.').to_lowercase())
-                .collect(),
+            Some(client) => {
+                let attributes = client.attributes.as_ref()?;
+                Some((attributes.support_file_type.iter()).map(|x| x.trim().trim_start_matches('.').to_lowercase()).collect())
+            },
             _ => None,
         }
     }
