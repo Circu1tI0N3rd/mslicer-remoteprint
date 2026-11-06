@@ -21,7 +21,7 @@ use ureq::unversioned::multipart::{Form, Part};
 
 use crate::{
     manager,
-    shared::{FileTransferInfo, FileTransferStatus, Response, epoch, WEB_PORT},
+    shared::{FileTransferInfo, FileTransferStatus, Response, epoch},
     v3::{
         commands::{
             BATCH_DELETE_FILES, Cmd, RETRIEVE_FILE_LIST, RETRIEVE_HISTORY, RETRIEVE_TASK_DETAILS,
@@ -97,14 +97,14 @@ impl RemotePrintV3 {
         }
 
         let ip = response.data.mainboard_ip.parse::<Ipv4Addr>().unwrap();
-        let addr = SocketAddr::new(ip.into(), WEB_PORT);
+        let addr = SocketAddr::new(ip.into(), 3030);
         let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(5))?;
 
         // Needed for elegoo-homeassistant proxy support
         let url = if response.data.proxy {
-            format!("ws://{ip}:{WEB_PORT}/websocket?id={mainboard_id}")
+            format!("ws://{ip}:3030/websocket?id={mainboard_id}")
         } else {
-            format!("ws://{ip}:{WEB_PORT}/websocket")
+            format!("ws://{ip}:3030/websocket")
         };
 
         let (mut socket, rsp) = tungstenite::client(url, stream)?;

@@ -6,8 +6,6 @@ use std::{
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::shared::WEB_PORT;
-
 /// Progress of asking a printer for its camera stream (SDCP V3 command 386).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum CameraState {
@@ -184,7 +182,7 @@ fn as_u64(value: &Value) -> Option<u64> {
 /// Addresses (camera, timelapse) are chosen by the printer and then connected
 /// to, so only accept http(s) and rtsp(s) pointing at the printer itself.
 /// A bare path (`/media/disk/1.mp4`) is taken to be on the printer's web
-/// server, which shares the websocket's port (`WEB_PORT`).
+/// server, which shares the websocket's port 3030.
 pub fn validate_printer_url(url: &str, printer: Ipv4Addr) -> Result<String, String> {
     // File names can hold spaces, which are not valid in a URL.
     let url = url.trim().replace(' ', "%20");
@@ -196,7 +194,7 @@ pub fn validate_printer_url(url: &str, printer: Ipv4Addr) -> Result<String, Stri
     }
 
     if url.starts_with('/') && !url.starts_with("//") {
-        return Ok(format!("http://{printer}:{WEB_PORT}{url}"));
+        return Ok(format!("http://{printer}:3030{url}"));
     }
 
     let rest = ["http://", "https://", "rtsp://", "rtsps://"]
